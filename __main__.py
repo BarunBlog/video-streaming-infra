@@ -2,9 +2,9 @@
 
 import pulumi
 import pulumi_aws as aws
-from pulumi_aws.ec2 import Instance
 
 # Configurations
+config = pulumi.Config()
 region = aws.config.region
 
 # Creating a VPC
@@ -113,7 +113,7 @@ aws.ec2.RouteTableAssociation("vidizone-private-rt-association-1",
 )
 
 # Associate route table with private subnet 2
-aws.ec2.RouteTableAssociation("vidizone-private-rt-association-1",
+aws.ec2.RouteTableAssociation("vidizone-private-rt-association-2",
     subnet_id=private_subnet2.id,
     route_table_id=private_route_table1.id
 )
