@@ -2,6 +2,7 @@
 
 import pulumi
 import pulumi_aws as aws
+import json
 
 # Configurations
 config = pulumi.Config()
@@ -167,6 +168,12 @@ app_server_security_group = aws.ec2.SecurityGroup("vidizone-app-server-sg",
             to_port=80,
             cidr_blocks=["10.0.1.0/24"],  # Allow HTTP only from public subnet
         ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=32,
+            to_port=32,
+            cidr_blocks=["10.0.1.0/24"],  # Allow User-data from public subnet
+        ),
     ],
     egress=[
         aws.ec2.SecurityGroupEgressArgs(
@@ -180,6 +187,44 @@ app_server_security_group = aws.ec2.SecurityGroup("vidizone-app-server-sg",
         "Name": "vidizone-app-server-sg",
     }
 )
+
+# Security group for flower server
+flower_server_security_group = aws.ec2.SecurityGroup("vidizone-flower-server-sg",
+    vpc_id=vpc.id,
+    description="Allow HTTP and SSH from public subnet",
+    ingress=[
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=22,
+            to_port=22,
+            cidr_blocks=["10.0.1.0/24"],  # Allow SSH only from public subnet
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=5000,
+            to_port=5000,
+            cidr_blocks=["10.0.1.0/24"],  # Allow flower port traffic only from public subnet
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=32,
+            to_port=32,
+            cidr_blocks=["10.0.1.0/24"],  # Allow User-data from public subnet
+        ),
+    ],
+    egress=[
+        aws.ec2.SecurityGroupEgressArgs(
+            protocol="-1",
+            from_port=0,
+            to_port=0,
+            cidr_blocks=["0.0.0.0/0"],  # Allow all outbound traffic
+        ),
+    ],
+    tags={
+        "Name": "vidizone-flower-server-sg",
+    }
+)
+
 
 # Security group for the redis server (Private subnet 2)
 redis_server_security_group = aws.ec2.SecurityGroup("vidizone-redis-server-sg",
@@ -223,6 +268,12 @@ worker_server_security_group = aws.ec2.SecurityGroup("vidizone-worker-server-sg"
             from_port=22,
             to_port=22,
             cidr_blocks=["10.0.1.0/24"],  # Allow SSH only from public subnet
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=32,
+            to_port=32,
+            cidr_blocks=["10.0.1.0/24"],  # Allow User-data from public subnet
         ),
     ],
     egress=[
@@ -298,6 +349,17 @@ for i in range(num_of_app_servers):
         tags={"Name": f"vidizone-app-server-instance-{i+1}"},
     )
 
+# Creating Flower server in the private subnet 1
+aws.ec2.Instance(f"vidizone-flower-server-instance",
+    instance_type="t2.micro",
+    ami=ami_id,
+    subnet_id=private_subnet1.id,
+    vpc_security_group_ids=[flower_server_security_group.id],
+    key_name="MyKeyPair",
+    associate_public_ip_address=False,
+    tags={"Name": f"vidizone-flower-server-instance"},
+)
+
 # Creating ec2 instance for redis
 aws.ec2.Instance(f"vidizone-redis-server-instance",
     instance_type="t2.micro",
@@ -333,3 +395,66 @@ aws.ec2.Instance(f"vidizone-postgres-db-instance",
     associate_public_ip_address=False,
     tags={"Name": f"vidizone-postgres-db-instance"},
 )
+
+# Create an S3 bucket
+bucket = aws.s3.BucketV2("vidizone-s3-bucket",
+    bucket="vidizone-streamer",
+    tags={
+        "Name": "vidizone-streamer",
+    },
+)
+
+bucket_ownership_controls = aws.s3.BucketOwnershipControls("bucket_ownership_controls",
+    bucket=bucket.id,
+    rule={
+        "object_ownership": "BucketOwnerPreferred",
+    })
+
+bucket_public_access_block = aws.s3.BucketPublicAccessBlock("bucket_public_access_block",
+    bucket=bucket.id,
+    block_public_acls=False,
+    block_public_policy=False,
+    ignore_public_acls=False,
+    restrict_public_buckets=False
+)
+
+example_bucket_acl_v2 = aws.s3.BucketAclV2("example_bucket_acl",
+    bucket=bucket.id,
+    acl="public-read",
+    opts = pulumi.ResourceOptions(depends_on=[
+            bucket_ownership_controls,
+            bucket_public_access_block,
+    ]))
+
+bucket_cors_configuration_v2 = aws.s3.BucketCorsConfigurationV2("vidizone-cors-config",
+    bucket=bucket.id,
+    cors_rules=[
+        {
+            "allowed_headers": ["Authorization", "*"],
+            "allowed_methods": ["GET", "HEAD"],
+            "allowed_origins": ["*"],
+            "expose_headers": ["ETag"],
+            "max_age_seconds": 3000,
+        }
+    ]
+)
+
+# Attach the bucket policy to the bucket
+bucket_policy_resource = aws.s3.BucketPolicy("vidzone-streamer-policy",
+    bucket=bucket.id,
+    policy=bucket.id.apply(lambda bucket_id: json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": [
+                    f"arn:aws:s3:::{bucket_id}/static/*",
+                    f"arn:aws:s3:::{bucket_id}/media/*"
+                ]
+            }
+        ]
+    }))
+)
+
