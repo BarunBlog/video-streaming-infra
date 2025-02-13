@@ -5,7 +5,7 @@ set -e
 
 # Variables (Update these as per your requirements)
 POSTGRES_VERSION="16"
-POSTGRES_USER="BarunAdmin"
+POSTGRES_USER="barunadmin"
 POSTGRES_PASSWORD="1B2A456"
 POSTGRES_DB="videostream_db"
 PORT="5432"
@@ -35,12 +35,11 @@ echo "Enabling PostgreSQL service on boot..."
 sudo systemctl enable postgresql@$POSTGRES_VERSION-main
 
 echo "Creating PostgreSQL user and database..."
-# Switch to the postgres user to execute SQL commands
-sudo -u postgres psql <<EOF
-CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';
-CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER;
-GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;
-EOF
+# Creating database user
+sudo -u postgres psql -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';"
+sudo -u postgres psql -c "CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER;"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;"
+
 
 echo "Configuring UFW to allow PostgreSQL traffic on port $PORT..."
 # Optional: Configure UFW (adjust security groups as needed)
