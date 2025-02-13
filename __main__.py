@@ -170,9 +170,9 @@ app_server_security_group = aws.ec2.SecurityGroup("vidizone-app-server-sg",
         ),
         aws.ec2.SecurityGroupIngressArgs(
             protocol="tcp",
-            from_port=32,
-            to_port=32,
-            cidr_blocks=["10.0.1.0/24"],  # Allow User-data from public subnet
+            from_port=8000,
+            to_port=8000,
+            cidr_blocks=["10.0.1.0/24"],  # Allow Django app traffic from public subnet
         ),
     ],
     egress=[
@@ -203,7 +203,7 @@ flower_server_security_group = aws.ec2.SecurityGroup("vidizone-flower-server-sg"
             protocol="tcp",
             from_port=5000,
             to_port=5000,
-            cidr_blocks=["10.0.1.0/24"],  # Allow flower port traffic only from public subnet
+            cidr_blocks=["10.0.1.0/24", "10.0.2.0/24"],  # Allow Flower port traffic from public and private subnets
         ),
         aws.ec2.SecurityGroupIngressArgs(
             protocol="tcp",
@@ -241,7 +241,7 @@ redis_server_security_group = aws.ec2.SecurityGroup("vidizone-redis-server-sg",
             protocol="tcp",
             from_port=6379,
             to_port=6379,
-            cidr_blocks=["10.0.2.0/24"],  # Allow only from private subnet 1
+            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow from private subnet 1 and 2
         ),
     ],
     egress=[
