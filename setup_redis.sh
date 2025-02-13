@@ -25,7 +25,7 @@ sudo cp redis.conf /etc/redis/
 
 # Update Redis configuration to allow external connections
 sudo sed -i "s/^bind 127.0.0.1 -::1/bind 0.0.0.0/" /etc/redis/redis.conf
-sudo sed -i "s/^# requirepass .*/requirepass $REDIS_PASSWORD/" /etc/redis/redis.conf  # Optional: set a password
+# echo "requirepass $REDIS_PASSWORD" | sudo tee -a /etc/redis/redis.conf
 sudo sed -i "s/^protected-mode yes/protected-mode no/" /etc/redis/redis.conf
 sudo sed -i "s@^dir ./@dir /var/lib/redis@" /etc/redis/redis.conf
 
