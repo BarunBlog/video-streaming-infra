@@ -51,6 +51,17 @@ private_subnet2 = aws.ec2.Subnet("vidizone-private-subnet-2",
     }
 )
 
+# Create a private subnet for NFS server
+private_nfs_subnet = aws.ec2.Subnet("vidizone-private-nfs-subnet",
+    vpc_id=vpc.id,
+    cidr_block="10.0.4.0/24",
+    map_public_ip_on_launch=False,
+    availability_zone="ap-southeast-1b",
+    tags={
+        "Name": "vidizone-private-nfs-subnet",
+    }
+)
+
 # Create an Elastic IP for the NAT Gateway
 eip = aws.ec2.Eip("vidizone-nat-eip",
     domain="vpc",
@@ -116,6 +127,12 @@ aws.ec2.RouteTableAssociation("vidizone-private-rt-association-1",
 # Associate route table with private subnet 2
 aws.ec2.RouteTableAssociation("vidizone-private-rt-association-2",
     subnet_id=private_subnet2.id,
+    route_table_id=private_route_table1.id
+)
+
+# Associate route table with private NFS subnet
+aws.ec2.RouteTableAssociation("vidizone-private-rt-nfs-association",
+    subnet_id=private_nfs_subnet.id,
     route_table_id=private_route_table1.id
 )
 
@@ -186,6 +203,25 @@ app_server_security_group = aws.ec2.SecurityGroup("vidizone-app-server-sg",
     tags={
         "Name": "vidizone-app-server-sg",
     }
+)
+
+nfs_server_security_group = aws.ec2.SecurityGroup("vidizone-nfs-server-sg",
+    vpc_id=vpc.id,
+    description="Allow SSH from public subnet and NFS from app server and worker server",
+    ingress=[
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=22,
+            to_port=22,
+            cidr_blocks=["10.0.1.0/24"],  # Allow SSH only from public subnet
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=2049,
+            to_port=2049,
+            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow NFS from private subnet 1 and private subnet 2
+        ),
+    ]
 )
 
 # Security group for flower server
@@ -348,6 +384,17 @@ for i in range(num_of_app_servers):
         associate_public_ip_address=False,
         tags={"Name": f"vidizone-app-server-instance-{i+1}"},
     )
+
+# Creating ec2 instance for the nfs file server
+aws.ec2.Instance(f"vidizone-nfs-server-instance",
+    instance_type="t2.micro",
+    ami=ami_id,
+    subnet_id=private_nfs_subnet.id,
+    vpc_security_group_ids=[nfs_server_security_group.id],
+    key_name="MyKeyPair",
+    associate_public_ip_address=False,
+    tags={"Name": f"vidizone-nfs-server-instance"},
+)
 
 # Creating Flower server in the private subnet 1
 aws.ec2.Instance(f"vidizone-flower-server-instance",
