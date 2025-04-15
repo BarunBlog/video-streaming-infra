@@ -4,6 +4,8 @@ import pulumi
 import pulumi_aws as aws
 import json
 
+BUCKET_NAME = "vidizone-streamer1"
+
 # Configurations
 config = pulumi.Config()
 region = aws.config.region
@@ -221,7 +223,18 @@ nfs_server_security_group = aws.ec2.SecurityGroup("vidizone-nfs-server-sg",
             to_port=2049,
             cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow NFS from private subnet 1 and private subnet 2
         ),
-    ]
+    ],
+    egress=[
+            aws.ec2.SecurityGroupEgressArgs(
+                protocol="-1",
+                from_port=0,
+                to_port=0,
+                cidr_blocks=["0.0.0.0/0"],  # Allow all outbound traffic
+            ),
+        ],
+        tags={
+            "Name": "vidizone-nfs-server-sg",
+        }
 )
 
 # Security group for flower server
@@ -340,7 +353,7 @@ postgres_db_security_group = aws.ec2.SecurityGroup("vidizone-postgres-db-sg",
             protocol="tcp",
             from_port=5432,
             to_port=5432,
-            cidr_blocks=["10.0.2.0/24"],  # Allow traffic from private subnet 1
+            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow traffic from private subnet 1 and 2
         ),
     ],
     egress=[
@@ -445,9 +458,9 @@ aws.ec2.Instance(f"vidizone-postgres-db-instance",
 
 # Create an S3 bucket
 bucket = aws.s3.BucketV2("vidizone-s3-bucket",
-    bucket="vidizone-streamer",
+    bucket=BUCKET_NAME,
     tags={
-        "Name": "vidizone-streamer",
+        "Name": BUCKET_NAME,
     },
 )
 
