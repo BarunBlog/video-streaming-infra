@@ -53,10 +53,21 @@ private_subnet2 = aws.ec2.Subnet("vidizone-private-subnet-2",
     }
 )
 
+# Create a private subnet 3
+private_subnet3 = aws.ec2.Subnet("vidizone-private-subnet-3",
+    vpc_id=vpc.id,
+    cidr_block="10.0.4.0/24",
+    map_public_ip_on_launch=False,
+    availability_zone="ap-southeast-1c",
+    tags={
+        "Name": "vidizone-private-subnet-3",
+    }
+)
+
 # Create a private subnet for NFS server
 private_nfs_subnet = aws.ec2.Subnet("vidizone-private-nfs-subnet",
     vpc_id=vpc.id,
-    cidr_block="10.0.4.0/24",
+    cidr_block="10.0.5.0/24",
     map_public_ip_on_launch=False,
     availability_zone="ap-southeast-1b",
     tags={
@@ -129,6 +140,12 @@ aws.ec2.RouteTableAssociation("vidizone-private-rt-association-1",
 # Associate route table with private subnet 2
 aws.ec2.RouteTableAssociation("vidizone-private-rt-association-2",
     subnet_id=private_subnet2.id,
+    route_table_id=private_route_table1.id
+)
+
+# Associate route table with private subnet 3
+aws.ec2.RouteTableAssociation("vidizone-private-rt-association-3",
+    subnet_id=private_subnet3.id,
     route_table_id=private_route_table1.id
 )
 
@@ -221,7 +238,7 @@ nfs_server_security_group = aws.ec2.SecurityGroup("vidizone-nfs-server-sg",
             protocol="tcp",
             from_port=2049,
             to_port=2049,
-            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow NFS from private subnet 1 and private subnet 2
+            cidr_blocks=["10.0.2.0/24", "10.0.4.0/24"],  # Allow NFS from private subnet 1 and private subnet 2
         ),
     ],
     egress=[
@@ -278,7 +295,7 @@ flower_server_security_group = aws.ec2.SecurityGroup("vidizone-flower-server-sg"
 # Security group for the redis server (Private subnet 2)
 redis_server_security_group = aws.ec2.SecurityGroup("vidizone-redis-server-sg",
     vpc_id=vpc.id,
-    description="Allow traffic to Redis server only from app servers, and SSH from Bastion server",
+    description="Allow traffic to Redis server only from app servers, worker servers, and SSH from Bastion server",
     ingress=[
         aws.ec2.SecurityGroupIngressArgs(
             protocol="tcp",
@@ -290,7 +307,7 @@ redis_server_security_group = aws.ec2.SecurityGroup("vidizone-redis-server-sg",
             protocol="tcp",
             from_port=6379,
             to_port=6379,
-            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow from private subnet 1 and 2
+            cidr_blocks=["10.0.2.0/24", "10.0.4.0/24"],  # Allow from private subnet 1 and 2
         ),
     ],
     egress=[
@@ -353,7 +370,7 @@ postgres_db_security_group = aws.ec2.SecurityGroup("vidizone-postgres-db-sg",
             protocol="tcp",
             from_port=5432,
             to_port=5432,
-            cidr_blocks=["10.0.2.0/24", "10.0.3.0/24"],  # Allow traffic from private subnet 1 and 2
+            cidr_blocks=["10.0.2.0/24", "10.0.4.0/24"],  # Allow traffic from private subnet 1 and 3
         ),
     ],
     egress=[
@@ -420,16 +437,30 @@ aws.ec2.Instance(f"vidizone-flower-server-instance",
     tags={"Name": f"vidizone-flower-server-instance"},
 )
 
-# Creating ec2 instance for redis
-aws.ec2.Instance(f"vidizone-redis-server-instance",
+# Creating ec2 instance for redis server, used as celery broker
+aws.ec2.Instance(f"vidizone-redis-broker-server-instance",
     instance_type="t2.micro",
     ami=ami_id,
     subnet_id=private_subnet2.id,
     vpc_security_group_ids=[redis_server_security_group.id],
     key_name="MyKeyPair",
     associate_public_ip_address=False,
-    tags={"Name": f"vidizone-redis-server-instance"},
+    tags={"Name": f"vidizone-redis-broker-server-instance"},
 )
+
+# Creating ec2 instances for redis cluster
+num_of_redis_servers = 6
+
+for i in range(num_of_redis_servers):
+    aws.ec2.Instance(f"vidizone-redis-server-instance-{i+1}",
+        instance_type="t2.micro",
+        ami=ami_id,
+        subnet_id=private_subnet2.id,
+        vpc_security_group_ids=[redis_server_security_group.id],
+        key_name="MyKeyPair",
+        associate_public_ip_address=False,
+        tags={"Name": f"vidizone-redis-server-instance-{i+1}"},
+    )
 
 # Creating ec2 instances for worker servers
 num_of_worker_servers = 2
@@ -438,7 +469,7 @@ for i in range(num_of_worker_servers):
     aws.ec2.Instance(f"vidizone-worker-server-instance-{i+1}",
         instance_type="t2.medium",
         ami=ami_id,
-        subnet_id=private_subnet2.id,
+        subnet_id=private_subnet3.id,
         vpc_security_group_ids=[worker_server_security_group.id],
         key_name="MyKeyPair",
         associate_public_ip_address=False,
@@ -449,7 +480,7 @@ for i in range(num_of_worker_servers):
 aws.ec2.Instance(f"vidizone-postgres-db-instance",
     instance_type="t2.micro",
     ami=ami_id,
-    subnet_id=private_subnet2.id,
+    subnet_id=private_subnet3.id,
     vpc_security_group_ids=[postgres_db_security_group.id],
     key_name="MyKeyPair",
     associate_public_ip_address=False,
@@ -468,7 +499,8 @@ bucket_ownership_controls = aws.s3.BucketOwnershipControls("bucket_ownership_con
     bucket=bucket.id,
     rule={
         "object_ownership": "BucketOwnerPreferred",
-    })
+    }
+)
 
 bucket_public_access_block = aws.s3.BucketPublicAccessBlock("bucket_public_access_block",
     bucket=bucket.id,
