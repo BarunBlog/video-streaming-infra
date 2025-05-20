@@ -436,7 +436,7 @@ num_of_worker_servers = 2
 
 for i in range(num_of_worker_servers):
     aws.ec2.Instance(f"vidizone-worker-server-instance-{i+1}",
-        instance_type="t2.micro",
+        instance_type="t2.medium",
         ami=ami_id,
         subnet_id=private_subnet2.id,
         vpc_security_group_ids=[worker_server_security_group.id],
