@@ -307,7 +307,13 @@ redis_server_security_group = aws.ec2.SecurityGroup("vidizone-redis-server-sg",
             protocol="tcp",
             from_port=6379,
             to_port=6379,
-            cidr_blocks=["10.0.2.0/24", "10.0.4.0/24"],  # Allow from private subnet 1 and 2
+            cidr_blocks=["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24", "10.0.4.0/24"],  # Allow from public, private subnet 1 and 2
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=16379,
+            to_port=16379,
+            cidr_blocks=["10.0.3.0/24"],  # Allow Redis cluster bus communication across VPC
         ),
     ],
     egress=[
