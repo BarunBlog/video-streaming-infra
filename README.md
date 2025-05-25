@@ -14,7 +14,10 @@ This project includes:
 ![GitHub Logo](system_design.png)
 
 ## Creating S3 bucket
-If you want to run the streaming project locally, then you just need to create an S3 bucket and you are ready to run the project.
+#### Note:
+You don't need to create s3 bucket manually if you want to run pulumi scripts.
+
+If you want to run the streaming project locally, then you must need to create an S3 bucket, and you are ready to run the project.
 Make sure you name the bucket name : `vidizone-streamer1`
 
 ### Bucket Policy To Create S3 Bucket
